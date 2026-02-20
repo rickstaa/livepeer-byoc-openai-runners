@@ -1,0 +1,88 @@
+services:
+  # BYOC runner: receives /v1/chat/completions from gateway and forwards to upstream Ollama OpenAI-compatible endpoint
+  openai_chat_completion_runner:
+    build: openai-chat-completion-runner
+    container_name: openai_chat_completion_runner
+    environment:
+      - RUNNER_ADDR=:8080
+      - UPSTREAM_URL=http://ollama:11434/v1/chat/completions
+
+  # BYOC image runner: GPU-accelerated image generation via diffusers
+  byoc_image_runner:
+    build: openai-image-generation-runner
+    container_name: byoc_image_runner
+    runtime: nvidia
+    environment:
+      - MODEL_ID=SG161222/RealVisXL_V4.0_Lightning
+      - MODEL_DIR=/models
+      - RUNNER_PORT=8080
+      - DEVICE=cuda
+      - DTYPE=float16
+      - MAX_QUEUE_SIZE=5
+      - USE_TORCH_COMPILE=false
+    volumes:
+      - ai-image-models:/models
+      - ai-image-kernel_cache:/cache
+
+  # BYOC embeddings runner: receives /v1/embeddings from gateway and forwards to upstream Ollama OpenAI-compatible endpoint
+  byoc_embeddings_runner:
+    build: openai-embeddings-runner
+    container_name: byoc_embeddings_runner
+    environment:
+      - RUNNER_ADDR=:8080
+      - UPSTREAM_URL=http://ollama:11434/v1/embeddings
+
+  # Register chat completion capability with the orchestrator
+  register_capability:
+    image: registry.livepeer.tools/livepeer-byoc-register-capability:latest
+    container_name: register_capability
+    environment:
+      - ORCH_URL=https://YOUR_ORCHESTRATOR:8935
+      - ORCH_SECRET=orch-secret
+      - CAPABILITY_NAME=openai-chat-completion
+      - CAPABILITY_URL=http://openai_chat_completion_runner:8080
+      - PRICE_PER_UNIT=250
+      - CAPACITY=5
+      - RETRIES=30
+      - RETRY_DELAY_SECONDS=3
+    depends_on:
+      - openai_chat_completion_runner
+
+  # Register image generation capability with the orchestrator
+  register_image_capability:
+    image: registry.livepeer.tools/livepeer-byoc-register-capability:latest
+    container_name: register_image_capability
+    environment:
+      - ORCH_URL=https://YOUR_ORCHESTRATOR:8935
+      - ORCH_SECRET=orch-secret
+      - CAPABILITY_NAME=openai-image-generation
+      - CAPABILITY_URL=http://byoc_image_runner:8080
+      - PRICE_PER_UNIT=500
+      - CAPACITY=3
+      - RETRIES=30
+      - RETRY_DELAY_SECONDS=3
+    depends_on:
+      - byoc_image_runner
+
+  # Register embeddings capability with the orchestrator
+  register_embeddings_capability:
+    image: registry.livepeer.tools/livepeer-byoc-register-capability:latest
+    container_name: register_embeddings_capability
+    environment:
+      - ORCH_URL=https://YOUR_ORCHESTRATOR:8935
+      - ORCH_SECRET=orch-secret
+      - CAPABILITY_NAME=openai-text-embedding
+      - CAPABILITY_URL=http://byoc_embeddings_runner:8080
+      - PRICE_PER_UNIT=100
+      - CAPACITY=10
+      - RETRIES=30
+      - RETRY_DELAY_SECONDS=3
+    depends_on:
+      - byoc_embeddings_runner
+
+
+volumes:
+  ai-image-models:
+    external: true
+  ai-image-kernel_cache:
+    external: true

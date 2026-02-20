@@ -1,0 +1,12 @@
+# torch is installed separately in Dockerfile with CUDA 12.8 wheels
+diffusers>=0.30.0
+transformers>=4.40.0
+accelerate>=0.30.0
+safetensors>=0.4.0
+xformers>=0.0.25
+sentencepiece>=0.2.0
+protobuf>=4.25.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.6.0
+Pillow>=10.0.0

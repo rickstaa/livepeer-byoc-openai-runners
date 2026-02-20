@@ -1,0 +1,14 @@
+{
+  "name": "byoc-openai-runner-tester",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "openai": "^6.18.0"
+  },
+  "scripts": {
+    "test:chat-completion": "node test-chat-completion.mjs",
+    "test:image-generation": "node test-image-generation.mjs",
+    "test:text-embedding": "node test-text-embedding.mjs"
+  }
+}
+

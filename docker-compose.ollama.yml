@@ -1,0 +1,27 @@
+# Reference Ollama setup for use with the BYOC runners.
+#
+# Usage:
+#   docker compose -f docker-compose.ollama.yml up -d
+#
+# Then point the runners at this instance:
+#   UPSTREAM_URL=http://ollama:11434/v1/chat/completions  (chat completion runner)
+#   UPSTREAM_URL=http://ollama:11434/v1/embeddings        (embeddings runner)
+#
+# To pull models:
+#   docker exec ollama ollama pull qwen3:8b
+#   docker exec ollama ollama pull nomic-embed-text
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    runtime: nvidia
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+
+volumes:
+  ollama-data:
