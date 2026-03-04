@@ -143,7 +143,11 @@ def load_pipeline(model_id: str, model_dir: str, device: str, dtype: torch.dtype
             torch_dtype=dtype,
             cache_dir=model_dir,
         )
-        _pipeline.to(device)
+        # FLUX.1-dev is ~24GB in fp16 — .to(device) would OOM on 32GB GPUs
+        # because text encoders + VAE push total past VRAM capacity.
+        # CPU offload keeps components in RAM, moving each to GPU only during
+        # its forward pass, keeping peak VRAM at ~12-16GB.
+        _pipeline.enable_model_cpu_offload()
 
     elif _model_family in ("RealVisXL", "SDXL"):
         from diffusers import StableDiffusionXLPipeline
