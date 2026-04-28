@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,6 +28,7 @@ func main() {
 	if upstream == "" {
 		log.Fatal("UPSTREAM_URL is required, e.g. http://HOST:PORT/v1/chat/completions")
 	}
+	maxBody := envInt64("MAX_BODY_BYTES", 25<<20) // 25 MiB; headroom for base64 image_url payloads
 
 	// Streaming-friendly transport
 	transport := &http.Transport{
@@ -44,7 +46,7 @@ func main() {
 	client := &http.Client{Transport: transport}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/chat/completions", newChatCompletionsHandler(client, upstream))
+	mux.HandleFunc("/v1/chat/completions", newChatCompletionsHandler(client, upstream, maxBody))
 
 	// Simple health check
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -61,7 +63,7 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-func newChatCompletionsHandler(client *http.Client, upstream string) http.HandlerFunc {
+func newChatCompletionsHandler(client *http.Client, upstream string, maxBody int64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -76,10 +78,15 @@ func newChatCompletionsHandler(client *http.Client, upstream string) http.Handle
 			defer cancel()
 		}
 
-		// Forward request to upstream (OpenAI-compatible endpoint)
-		const maxBody = 5 << 20 // 5MB
-		bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, maxBody))
+		// MaxBytesReader (not LimitReader) so overflow errors instead of truncating silently.
+		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
+			var mbErr *http.MaxBytesError
+			if errors.As(err, &mbErr) {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
+			}
 			http.Error(w, "failed to read request body", http.StatusBadRequest)
 			return
 		}
@@ -127,6 +134,19 @@ func env(k, def string) string {
 		return def
 	}
 	return v
+}
+
+func envInt64(k string, def int64) int64 {
+	v := os.Getenv(k)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		log.Printf("invalid %s=%q, using default %d", k, v, def)
+		return def
+	}
+	return n
 }
 
 func decodeLivepeerHeader(v string) (livepeerHeader, bool) {

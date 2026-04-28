@@ -102,6 +102,7 @@ openai-runners/
 |----------|---------|-------------|
 | `RUNNER_ADDR` | `:8080` | Listen address |
 | `UPSTREAM_URL` | **required** | Ollama OpenAI-compatible endpoint, e.g. `http://HOST:PORT/v1/chat/completions` |
+| `MAX_BODY_BYTES` | `26214400` (25 MiB) | Max request body size. Oversized requests get a `413` (no silent truncation). Raise for very large multimodal payloads. |
 
 ### Embeddings Runner (`byoc_embeddings_runner`)
 
@@ -256,6 +257,28 @@ curl -sS http://localhost:8090/v1/embeddings \
     "input": "Hello world"
   }'
 ```
+
+### Vision (`image_url`)
+
+`image_url` content forwards byte-for-byte to the upstream. Ollama's OpenAI shim (default upstream) accepts only base64 `data:` URLs; vLLM and OpenAI's API accept HTTP URLs too. Use the object form `image_url: {"url": "..."}` for portability.
+
+```python
+import base64
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8090/v1", api_key="not-used")
+b64 = base64.b64encode(open("cat.jpg", "rb").read()).decode()
+
+print(client.chat.completions.create(
+    model="gemma3:4b",
+    messages=[{"role": "user", "content": [
+        {"type": "text", "text": "Describe this image."},
+        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+    ]}],
+).choices[0].message.content)
+```
+
+Base64 inflates ~33%; resize images before encoding (vision models tile at ~512–768 px). `MAX_BODY_BYTES` default 25 MiB fits a single ~18 MB image; oversized payloads return `413`.
 
 ### OpenAI JavaScript SDK
 

@@ -1,0 +1,3 @@
+# Local Go build artifacts
+openai-chat-completion-runner/openai_chat_completion_runner
+openai-embeddings-runner/byoc_embeddings_runner
