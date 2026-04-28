@@ -69,6 +69,26 @@ func TestChatCompletionsHandler_Returns413WhenOverLimit(t *testing.T) {
 	}
 }
 
+// TestChatCompletionsHandler_ZeroCapRejectsAllBodies pins the upstream
+// http.MaxBytesReader contract: a zero (or clamped-from-negative) cap rejects
+// any non-empty body. main() refuses these values at startup, but this test
+// guards against the stdlib contract drifting and silently letting requests
+// through.
+func TestChatCompletionsHandler_ZeroCapRejectsAllBodies(t *testing.T) {
+	h := newChatCompletionsHandler(http.DefaultClient, "http://unused", 0)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions",
+		strings.NewReader("a")) // 1-byte body
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("zero cap should 413; got %d, body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 // TestChatCompletionsHandler_RejectsNonPost guards a small extra invariant:
 // non-POST methods get 405 before any body is read.
 func TestChatCompletionsHandler_RejectsNonPost(t *testing.T) {

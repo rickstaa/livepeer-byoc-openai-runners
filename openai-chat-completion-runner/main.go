@@ -29,6 +29,9 @@ func main() {
 		log.Fatal("UPSTREAM_URL is required, e.g. http://HOST:PORT/v1/chat/completions")
 	}
 	maxBody := envInt64("MAX_BODY_BYTES", 25<<20) // 25 MiB; headroom for base64 image_url payloads
+	if maxBody <= 0 {
+		log.Fatalf("MAX_BODY_BYTES must be positive, got %d", maxBody)
+	}
 
 	// Streaming-friendly transport
 	transport := &http.Transport{
