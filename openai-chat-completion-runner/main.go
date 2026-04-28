@@ -44,7 +44,25 @@ func main() {
 	client := &http.Client{Transport: transport}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1/chat/completions", newChatCompletionsHandler(client, upstream))
+
+	// Simple health check
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	log.Printf("BYOC runner listening on %s, upstream=%s", addr, upstream)
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
+}
+
+func newChatCompletionsHandler(client *http.Client, upstream string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -100,21 +118,7 @@ func main() {
 		copyAllHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		streamResponse(w, resp.Body)
-	})
-
-	// Simple health check
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
-
-	log.Printf("BYOC runner listening on %s, upstream=%s", addr, upstream)
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
 }
 
 func env(k, def string) string {
